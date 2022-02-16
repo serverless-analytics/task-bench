@@ -122,6 +122,7 @@ static const std::map<std::string, DependenceType> dtype_by_name = {
   {"spread", DependenceType::SPREAD},
   {"random_nearest", DependenceType::RANDOM_NEAREST},
   {"random_spread", DependenceType::RANDOM_SPREAD},
+  {"umbrella", DependenceType::UMBRELLA},
 };
 
 static std::map<DependenceType, std::string> make_name_by_dtype()
@@ -154,6 +155,7 @@ long TaskGraph::offset_at_timestep(long timestep) const
     return 0;
   case DependenceType::DOM:
     return std::max(0L, timestep + max_width - timesteps);
+  case DependenceType::UMBRELLA:
   case DependenceType::TREE:
   case DependenceType::FFT:
   case DependenceType::ALL_TO_ALL:
@@ -184,6 +186,11 @@ long TaskGraph::width_at_timestep(long timestep) const
                     std::min(timestep + 1, timesteps - timestep));
   case DependenceType::TREE:
     return std::min(max_width, 1L << std::min(timestep, 62L));
+  case DependenceType::UMBRELLA:
+  {
+    if (timestep == 0)  return 1;
+    return max_width;
+  }
   case DependenceType::FFT:
   case DependenceType::ALL_TO_ALL:
   case DependenceType::NEAREST:
@@ -208,6 +215,7 @@ long TaskGraph::max_dependence_sets() const
     return 1;
   case DependenceType::FFT:
     return (long)ceil(log2(max_width));
+  case DependenceType::UMBRELLA:
   case DependenceType::ALL_TO_ALL:
   case DependenceType::NEAREST:
     return 1;
@@ -239,6 +247,7 @@ long TaskGraph::dependence_set_at_timestep(long timestep) const
     return 0;
   case DependenceType::FFT:
     return (timestep + max_dependence_sets() - 1) % max_dependence_sets();
+  case DependenceType::UMBRELLA:
   case DependenceType::ALL_TO_ALL:
   case DependenceType::NEAREST:
     return 0;
@@ -316,6 +325,9 @@ size_t TaskGraph::reverse_dependencies(long dset, long point, std::pair<long, lo
       }
       return idx;
     }
+  case DependenceType::UMBRELLA:
+    deps[0] = std::pair<long, long>(0, max_width - 1);
+    return 1;
   case DependenceType::ALL_TO_ALL:
     deps[0] = std::pair<long, long>(0, max_width-1);
     return 1;
@@ -386,6 +398,8 @@ size_t TaskGraph::num_reverse_dependencies(long dset, long point) const
     return 1;
   case DependenceType::FFT:
     return 3;
+  case DependenceType::UMBRELLA:
+    return 1;
   case DependenceType::ALL_TO_ALL:
     return 1;
   case DependenceType::NEAREST:
@@ -458,6 +472,9 @@ size_t TaskGraph::dependencies(long dset, long point, std::pair<long, long> *dep
       }
       return idx;
     }
+  case DependenceType::UMBRELLA:
+    deps[0] = std::pair<long, long>(0, max_width - 1);
+    return 1;
   case DependenceType::ALL_TO_ALL:
     deps[0] = std::pair<long, long>(0, max_width-1);
     return 1;
@@ -527,6 +544,7 @@ size_t TaskGraph::num_dependencies(long dset, long point) const
     return 1;
   case DependenceType::FFT:
     return 3;
+  case DependenceType::UMBRELLA:
   case DependenceType::ALL_TO_ALL:
     return 1;
   case DependenceType::NEAREST:
